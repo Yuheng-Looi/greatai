@@ -1,5 +1,6 @@
 import dotenv from 'dotenv';
 import express from 'express';
+import cors from 'cors';
 import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
 import { MistralAIEmbeddings } from '@langchain/mistralai';
 import { Pinecone as PineconeClient } from '@pinecone-database/pinecone';
@@ -8,6 +9,7 @@ import { PineconeStore } from '@langchain/pinecone';
 dotenv.config();
 
 const app = express();
+app.use(cors());
 app.use(express.json());
 
 const llm = new ChatGoogleGenerativeAI({
@@ -18,7 +20,7 @@ const llm = new ChatGoogleGenerativeAI({
 const embeddings = new MistralAIEmbeddings({ model: 'mistral-embed' });
 const pinecone = new PineconeClient({ apiKey: process.env.PINECONE_API_KEY });
 const pineconeIndex = pinecone.Index(process.env.PINECONE_INDEX);
-const NAMESPACE = 'import-export-law';
+const NAMESPACE = process.env.PINECONE_NAMESPACE || 'import-export-law';
 const countryMap = { malaysia: 'MY', singapore: 'SG' };
 
 async function startServer() {
