@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { ChevronDown, Send, CheckCircle, XCircle } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 interface Message {
   id: string;
@@ -32,88 +34,82 @@ const ExportHelper: React.FC = () => {
     if (!itemDescription.trim()) return;
 
     setIsLoading(true);
-    
-    // Simulate AI processing
-    setTimeout(() => {
-      // Example result based on bicycle case
-      if (itemDescription.toLowerCase().includes('bicycle') || itemDescription.toLowerCase().includes('bike')) {
-        // AI asks question first (from left)
-        const aiQuestion: Message = {
-          id: Date.now().toString(),
-          type: 'ai',
-          content: "Can you provide the bicycle's material?"
-        };
-        
-        setMessages([aiQuestion]);
-        
-        // Then user answers (from right)
-        setTimeout(() => {
-          const userAnswer: Message = {
-            id: (Date.now() + 1).toString(),
-            type: 'user',
-            content: "It is made with aluminium."
-          };
-          
-          setMessages(prev => [...prev, userAnswer]);
-          
-          // Finally AI shows result (from left)
-          setTimeout(() => {
-            const aiResult: Message = {
-              id: (Date.now() + 2).toString(),
-              type: 'ai',
-              content: "According to Singapore Customs and MITI Malaysia, bicycles (HS Code 8712) are allowed.",
-              isAllowed: true,
-              documents: [
-                'Commercial Invoice',
-                'Packing List', 
-                'Export Declaration (MY)',
-                'Import Permit (SG, if required)',
-                'Shipping arrangement'
-              ]
-            };
-            
-            setMessages(prev => [...prev, aiResult]);
-            setIsLoading(false);
-          }, 1000);
-        }, 500);
-      } else {
-        // Generic processing for other items - show not allowed result
-        const resultMessage: Message = {
-          id: Date.now().toString(),
-          type: 'ai',
-          content: `❌ This item "${itemDescription}" is not allowed for export from ${fromCountry} to ${toCountry} according to trade regulations and customs clauses. Please check with relevant authorities for specific restrictions.`,
-          isAllowed: false,
-          documents: ['Export License Required', 'Special Permit Needed', 'Customs Declaration']
-        };
-        
-        setMessages([resultMessage]);
-        setIsLoading(false);
+    const userId = Date.now().toString();
+    const userMessage: Message = {
+      id: userId,
+      type: 'user',
+      content: itemDescription,
+    };
+    setMessages((prev) => [...prev, userMessage]);
+
+    try {
+      const resp = await fetch('/api/query', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: itemDescription }),
+      });
+      if (!resp.ok) {
+        const text = await resp.text();
+        throw new Error(`Request failed: ${resp.status} ${text}`);
       }
-    }, 1500);
+      const data: { answer?: string } = await resp.json();
+      const aiMessage: Message = {
+        id: `${userId}-ai`,
+        type: 'ai',
+        content: data?.answer ?? 'No answer returned.',
+      };
+      setMessages((prev) => [...prev, aiMessage]);
+    } catch (err: unknown) {
+      const errorMessage: Message = {
+        id: `${userId}-err`,
+        type: 'ai',
+        content: `Error contacting server: ${err instanceof Error ? err.message : String(err)}`,
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleChatSubmit = () => {
+  const handleChatSubmit = async () => {
     if (!chatInput.trim()) return;
 
+    const userId = Date.now().toString();
     const newMessage: Message = {
-      id: Date.now().toString(),
+      id: userId,
       type: 'user',
       content: chatInput
     };
 
+    const question = chatInput;
     setMessages(prev => [...prev, newMessage]);
     setChatInput('');
 
-    // Simulate AI response
-    setTimeout(() => {
+    try {
+      const resp = await fetch('/api/query', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question }),
+      });
+      if (!resp.ok) {
+        const text = await resp.text();
+        throw new Error(`Request failed: ${resp.status} ${text}`);
+      }
+      const data: { answer?: string } = await resp.json();
       const aiResponse: Message = {
-        id: (Date.now() + 1).toString(),
+        id: `${userId}-ai`,
         type: 'ai',
-        content: "Thank you for your question. Let me help you with more details about the export requirements..."
+        content: data?.answer ?? 'No answer returned.'
       };
-      
       setMessages(prev => [...prev, aiResponse]);
-    }, 1000);
+    } catch (err: unknown) {
+      const aiError: Message = {
+        id: `${userId}-err`,
+        type: 'ai',
+        content: `Error contacting server: ${err instanceof Error ? err.message : String(err)}`,
+      };
+      setMessages(prev => [...prev, aiError]);
+    }
   };
 
   return (
@@ -251,7 +247,9 @@ const ExportHelper: React.FC = () => {
                             </div>
                           </div>
                         ) : (
-                          <p>{message.content}</p>
+                          <div className="markdown-answer">
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
+                          </div>
                         )}
                       </div>
                     </div>

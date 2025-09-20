@@ -1,4 +1,3 @@
-import React from 'react';
 import ExportHelper from './components/ExportHelper';
 import './App.css';
 
