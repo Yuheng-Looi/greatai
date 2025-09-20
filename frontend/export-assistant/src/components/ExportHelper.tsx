@@ -46,7 +46,11 @@ const ExportHelper: React.FC = () => {
       const resp = await fetch('/api/query', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: itemDescription }),
+        body: JSON.stringify({
+          question: itemDescription,
+          fromCountry,
+          toCountry,
+        }),
       });
       if (!resp.ok) {
         const text = await resp.text();
@@ -89,7 +93,7 @@ const ExportHelper: React.FC = () => {
       const resp = await fetch('/api/query', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question }),
+        body: JSON.stringify({ question, fromCountry, toCountry }),
       });
       if (!resp.ok) {
         const text = await resp.text();

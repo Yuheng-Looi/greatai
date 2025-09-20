@@ -30,7 +30,7 @@ async function startServer() {
   });
 
   app.post('/query', async (req, res) => {
-    let { question, country = 'all' } = req.body;
+    let { question, country = 'all', fromCountry, toCountry } = req.body;
     if (!question) return res.status(400).json({ error: 'Missing question' });
 
     const conversation = []; // multi-turn conversation history
@@ -42,12 +42,13 @@ async function startServer() {
     while (!confident && turn < MAX_TURNS) {
       // Retrieve relevant docs
       const results = await vectorStore.similaritySearch(question);
+      // Prefer destination (toCountry) for filtering; fall back to provided 'country'
+      const countryKey = (toCountry || country || 'all').toString().toLowerCase();
       const filtered =
-        countryMap[country.toLowerCase()] !== undefined
+        countryMap[countryKey] !== undefined
           ? results.filter(
               (doc) =>
-                (doc.source || doc.metadata?.source) ===
-                countryMap[country.toLowerCase()]
+                (doc.source || doc.metadata?.source) === countryMap[countryKey]
             )
           : results;
       const toUse = filtered.length > 0 ? filtered : results;
@@ -109,12 +110,16 @@ ALWAYS:
 - Never include greetings, apologies, or commentary.
 `;
 
+      const routeInfo =
+        fromCountry && toCountry
+          ? `\n\nRoute: from ${fromCountry} to ${toCountry}`
+          : '';
       const messages = [
         { role: 'system', content: systemPrompt },
         ...conversation,
         {
           role: 'user',
-          content: `Question: ${question}\n\nContext:\n${context}`,
+          content: `Question: ${question}${routeInfo}\n\nContext:\n${context}`,
         },
       ];
 
