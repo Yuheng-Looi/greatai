@@ -52,11 +52,11 @@ const ExportHelper: React.FC = () => {
         const text = await resp.text();
         throw new Error(`Request failed: ${resp.status} ${text}`);
       }
-      const data: { answer?: string } = await resp.json();
+      const data: { answer?: string; message?: string } = await resp.json();
       const aiMessage: Message = {
         id: `${userId}-ai`,
         type: 'ai',
-        content: data?.answer ?? 'No answer returned.',
+        content: data?.answer ?? data?.message ?? 'No answer returned.',
       };
       setMessages((prev) => [...prev, aiMessage]);
     } catch (err: unknown) {
@@ -95,11 +95,11 @@ const ExportHelper: React.FC = () => {
         const text = await resp.text();
         throw new Error(`Request failed: ${resp.status} ${text}`);
       }
-      const data: { answer?: string } = await resp.json();
+      const data: { answer?: string; message?: string } = await resp.json();
       const aiResponse: Message = {
         id: `${userId}-ai`,
         type: 'ai',
-        content: data?.answer ?? 'No answer returned.'
+        content: data?.answer ?? data?.message ?? 'No answer returned.'
       };
       setMessages(prev => [...prev, aiResponse]);
     } catch (err: unknown) {

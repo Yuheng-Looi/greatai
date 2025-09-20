@@ -131,12 +131,11 @@ ALWAYS:
       if (confidence >= 80) {
         confident = true;
       } else {
-        // Ask user for clarification
-        // Here, for simplicity, we simulate follow-up by returning a prompt asking user input
-        // In production, you might maintain session or send follow-up to frontend
+        // Ask user for clarification - include 'answer' for frontend fallback
         return res.json({
           followUp: true,
           message: content,
+          answer: content,
           note: 'Please provide clarification for the follow-up question.',
         });
       }
