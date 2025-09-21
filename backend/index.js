@@ -1,5 +1,6 @@
 import dotenv from 'dotenv';
 import express from 'express';
+import cors from 'cors';
 import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
 import { MistralAIEmbeddings } from '@langchain/mistralai';
 import { Pinecone as PineconeClient } from '@pinecone-database/pinecone';
@@ -8,6 +9,7 @@ import { PineconeStore } from '@langchain/pinecone';
 dotenv.config();
 
 const app = express();
+app.use(cors());
 app.use(express.json());
 
 const llm = new ChatGoogleGenerativeAI({
@@ -18,7 +20,7 @@ const llm = new ChatGoogleGenerativeAI({
 const embeddings = new MistralAIEmbeddings({ model: 'mistral-embed' });
 const pinecone = new PineconeClient({ apiKey: process.env.PINECONE_API_KEY });
 const pineconeIndex = pinecone.Index(process.env.PINECONE_INDEX);
-const NAMESPACE = 'import-export-law';
+const NAMESPACE = process.env.PINECONE_NAMESPACE || 'import-export-law';
 const countryMap = { malaysia: 'MY', singapore: 'SG' };
 
 async function startServer() {
@@ -28,7 +30,7 @@ async function startServer() {
   });
 
   app.post('/query', async (req, res) => {
-    let { question, country = 'all' } = req.body;
+    let { question, country = 'all', fromCountry, toCountry } = req.body;
     if (!question) return res.status(400).json({ error: 'Missing question' });
 
     const conversation = []; // multi-turn conversation history
@@ -40,12 +42,13 @@ async function startServer() {
     while (!confident && turn < MAX_TURNS) {
       // Retrieve relevant docs
       const results = await vectorStore.similaritySearch(question);
+      // Prefer destination (toCountry) for filtering; fall back to provided 'country'
+      const countryKey = (toCountry || country || 'all').toString().toLowerCase();
       const filtered =
-        countryMap[country.toLowerCase()] !== undefined
+        countryMap[countryKey] !== undefined
           ? results.filter(
               (doc) =>
-                (doc.source || doc.metadata?.source) ===
-                countryMap[country.toLowerCase()]
+                (doc.source || doc.metadata?.source) === countryMap[countryKey]
             )
           : results;
       const toUse = filtered.length > 0 ? filtered : results;
@@ -107,12 +110,16 @@ ALWAYS:
 - Never include greetings, apologies, or commentary.
 `;
 
+      const routeInfo =
+        fromCountry && toCountry
+          ? `\n\nRoute: from ${fromCountry} to ${toCountry}`
+          : '';
       const messages = [
         { role: 'system', content: systemPrompt },
         ...conversation,
         {
           role: 'user',
-          content: `Question: ${question}\n\nContext:\n${context}`,
+          content: `Question: ${question}${routeInfo}\n\nContext:\n${context}`,
         },
       ];
 
@@ -129,12 +136,11 @@ ALWAYS:
       if (confidence >= 80) {
         confident = true;
       } else {
-        // Ask user for clarification
-        // Here, for simplicity, we simulate follow-up by returning a prompt asking user input
-        // In production, you might maintain session or send follow-up to frontend
+        // Ask user for clarification - include 'answer' for frontend fallback
         return res.json({
           followUp: true,
           message: content,
+          answer: content,
           note: 'Please provide clarification for the follow-up question.',
         });
       }

@@ -63,23 +63,36 @@ async function run() {
   const existingIndexes = Array.isArray(existingIndexesResponse)
     ? existingIndexesResponse
     : existingIndexesResponse?.indexes || [];
+  const existingIndexNames = existingIndexes
+    .map((idx) => (typeof idx === 'string' ? idx : idx?.name))
+    .filter(Boolean);
 
-  if (!existingIndexes.includes(indexName)) {
+  if (!existingIndexNames.includes(indexName)) {
     console.log(`📌 Creating new index: ${indexName}`);
-    await pinecone.createIndex({
-      name: indexName,
-      dimension: 1024, // your embedding dimension
-      metric: 'cosine', // typical for text embeddings
-      spec: {
-        serverless: {
-          cloud: 'aws',
-          region: 'us-east-1',
+    try {
+      await pinecone.createIndex({
+        name: indexName,
+        dimension: 1024, // your embedding dimension
+        metric: 'cosine', // typical for text embeddings
+        spec: {
+          serverless: {
+            cloud: 'aws',
+            region: 'us-east-1',
+          },
         },
-      },
-    });
+      });
 
-    console.log('✅ Index created, waiting for it to be ready...');
-    await new Promise((res) => setTimeout(res, 60000)); // wait ~1 min
+      console.log('✅ Index created, waiting for it to be ready...');
+      await new Promise((res) => setTimeout(res, 60000)); // wait ~1 min
+    } catch (error) {
+      const message = String(error?.message || '');
+      const status = error?.status || error?.code || error?.response?.status;
+      if (status === 409 || message.includes('ALREADY_EXISTS')) {
+        console.log(`ℹ️ Index ${indexName} already exists. Skipping creation.`);
+      } else {
+        throw error;
+      }
+    }
   }
 
   console.log('📦 Splitting documents into chunks...');
