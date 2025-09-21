@@ -1,0 +1,7 @@
+{
+  "name": "Export Advisor",
+  "description": "An AI-powered agent specialized in logistics and supply chain. Users can specify a product they want to move from one place to another, and the agent will provide a detailed response with references to relevant regulations.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
