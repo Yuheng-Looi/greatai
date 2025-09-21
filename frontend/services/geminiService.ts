@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type, Chat } from "@google/genai";
-import type { ShipmentItem, ShipmentDetails, AnalysisResult, Regulation } from '../types';
+import type { ShipmentItem, ShipmentDetails, AnalysisResult, Regulation, LawReference, ChatMessage } from '../types';
 
 if (!process.env.API_KEY) {
   console.warn("API_KEY environment variable not set. Using mock data.");
@@ -7,6 +7,11 @@ if (!process.env.API_KEY) {
 
 export const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
 export type { Chat };
+
+interface SourceSummary {
+    uri: string;
+    description: string;
+}
 
 
 const EXPORT_ADVICE_SCHEMA = {
@@ -137,5 +142,132 @@ export const getExportAdvice = async (items: ShipmentItem[], details: ShipmentDe
   } catch (e) {
     console.error("Failed to parse Gemini response:", response.text);
     throw new Error("Received an invalid response from the AI advisor.");
+  }
+};
+
+export const getFollowUpResponse = async (
+  prompt: string, 
+  history: ChatMessage[], 
+  shipmentItems: ShipmentItem[], 
+  shipmentDetails: ShipmentDetails, 
+  analysisResults: AnalysisResult[]
+): Promise<{ text: string; references: LawReference[] }> => {
+  if (!process.env.API_KEY) {
+    throw new Error("API_KEY is not configured.");
+  }
+
+  try {
+    const formattedHistory = history.map(msg => ({
+      role: msg.role,
+      parts: [{ text: msg.content }],
+    }));
+
+    const systemInstruction = `You are a helpful logistics and export/import assistant with access to current legal and regulatory information. 
+    
+    The user has completed a shipment analysis and is asking follow-up questions. Use the provided context to answer their questions accurately.
+    
+    **Response Formatting**:
+    - Structure your response with clear visual hierarchy using Markdown
+    - Use headers (#, ##), bullet points (-), and bold/italic text for clarity
+    - Keep responses concise and actionable
+    - AVOID long narrative paragraphs - make everything scannable
+    - Use standard Markdown tables to compare information (costs, regulations, timelines, etc.)
+    - When presenting numerical data, statistical information, or comparisons, generate interactive charts
+    
+    **Chart and Table Guidelines**:
+    - Use Markdown tables for comparing regulations, costs, timelines, or requirements across items/countries
+    - When presenting statistical data, cost breakdowns, or trends, generate a JSON object for a chart within a single \`\`\`json:chart code block
+    - The JSON object **MUST** be perfectly valid and parsable
+    - It **MUST** have a root-level property \`"type": "chart"\`
+    - It **MUST** have properties for \`"chartType"\`, \`"data"\`, and \`"options"\` that follow the Chart.js structure
+    - **Crucially**, the \`"data"\` array within a \`"datasets"\` object must contain **ONLY valid JSON numbers or \`null\`**. Do not include any text, annotations, or mathematical expressions. Pre-calculate any values before outputting.
+    - The \`"options"\` object should contain only valid JSON values. Do not include JavaScript functions
+    - **Example of Correct Chart Data**: \`"data": [338.55, 483.52, null, 620.00, 445.75]\`
+    - **Example of Incorrect Chart Data**: \`"data": [338.55, 483.52 (estimated), 620.00 + tax]\`
+    - Useful chart types: 'bar' (cost comparisons), 'pie' (tax breakdowns), 'line' (timeline/trends), 'doughnut' (category distributions)
+    
+    **When to Use Charts and Tables**:
+    - Cost breakdowns across items → Bar chart or table
+    - Tax/duty percentages → Pie or doughnut chart  
+    - Shipping timeline comparisons → Line chart or table
+    - Regulatory compliance by country → Table
+    - Historical shipping costs → Line chart
+    - Risk assessment scores → Bar chart
+    - Always provide both visual (chart) AND tabular data when showing numerical comparisons
+    
+    **Citations and Grounding**:
+    - Use the integrated Google Search tool to find relevant and up-to-date legal, regulatory, and logistics information
+    - Always cite your sources by referencing the retrieved documents
+    - At the very end of your entire response, add a single JSON code block with the language identifier \`json:source-summaries\`
+    - This block must contain a JSON array of objects with "uri" and "description" keys
+    - Do not include this block if no sources were used
+    - Example: \`\`\`json:source-summaries\n[{"uri": "https://example.com/page1", "description": "Official customs regulations for electronics imports."}]\n\`\`\`
+
+    **Current Shipment Context**:
+    - From: ${shipmentDetails.from}
+    - To: ${shipmentDetails.to}
+    - Via: ${shipmentDetails.via}
+    
+    Items: ${shipmentItems.map(item => `- ${item.description}`).join('\n')}
+    
+    Analysis Results: ${JSON.stringify(analysisResults, null, 2)}`;
+
+    const chat = ai.chats.create({
+        model: "gemini-2.5-flash",
+        history: formattedHistory,
+        config: {
+            systemInstruction: systemInstruction,
+            tools: [{googleSearch: {}}],
+        },
+    });
+
+    const result = await chat.sendMessage({ message: prompt });
+    const response = result;
+
+    let text = response.text;
+    const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
+    
+    const references: LawReference[] = [];
+    if (groundingChunks) {
+        for (const chunk of groundingChunks) {
+            if (chunk.web) {
+                references.push({
+                    uri: chunk.web.uri || '#',
+                    title: chunk.web.title || 'Untitled Source',
+                });
+            }
+        }
+    }
+    
+    const uniqueReferences = Array.from(new Map(references.map(item => [item['uri'], item])).values());
+
+    const summaryRegex = /```json:source-summaries\s*([\s\S]*?)\s*```/;
+    const summaryMatch = text.match(summaryRegex);
+
+    if (summaryMatch && summaryMatch[1]) {
+        try {
+            const summaries: SourceSummary[] = JSON.parse(summaryMatch[1]);
+            const summaryMap = new Map(summaries.map(s => [s.uri, s.description]));
+            
+            uniqueReferences.forEach(ref => {
+                if (summaryMap.has(ref.uri)) {
+                    ref.description = summaryMap.get(ref.uri);
+                }
+            });
+
+            text = text.replace(summaryRegex, '').trim();
+
+        } catch (e) {
+            console.error("Failed to parse source summaries JSON:", e);
+        }
+    }
+
+    return { text, references: uniqueReferences };
+  } catch (error) {
+    console.error("Error calling Gemini API for follow-up:", error);
+    return { 
+      text: "I'm sorry, I encountered an error while processing your request. Please check your connection and try again.", 
+      references: [] 
+    };
   }
 };

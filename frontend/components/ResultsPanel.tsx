@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import type { AnalysisResult, HistoryEntry } from '../types';
+import type { AnalysisResult, HistoryEntry, LawReference } from '../types';
 import { ResultItem } from './ResultItem';
 import { ClockIcon } from './icons/ClockIcon';
+import SourcesPanel from './SourcesPanel';
 
 interface ResultsPanelProps {
   results: AnalysisResult[];
@@ -10,14 +11,38 @@ interface ResultsPanelProps {
   history: HistoryEntry[];
   onLoadHistory: (entry: HistoryEntry) => void;
   onClearHistory: () => void;
+  activeTab?: 'current' | 'history' | 'sources';
+  onTabChange?: (tab: 'current' | 'history' | 'sources') => void;
+  sources?: LawReference[];
 }
 
-export const ResultsPanel: React.FC<ResultsPanelProps> = ({ results, isLoading, error, history, onLoadHistory, onClearHistory }) => {
-  const [activeTab, setActiveTab] = useState<'current' | 'history'>('current');
+export const ResultsPanel: React.FC<ResultsPanelProps> = ({ 
+  results, 
+  isLoading, 
+  error, 
+  history, 
+  onLoadHistory, 
+  onClearHistory,
+  activeTab: controlledActiveTab,
+  onTabChange,
+  sources = []
+}) => {
+  const [internalActiveTab, setInternalActiveTab] = useState<'current' | 'history' | 'sources'>('current');
+  
+  // Use controlled tab if provided, otherwise use internal state
+  const activeTab = controlledActiveTab || internalActiveTab;
+  
+  const handleTabChange = (tab: 'current' | 'history' | 'sources') => {
+    if (onTabChange) {
+      onTabChange(tab);
+    } else {
+      setInternalActiveTab(tab);
+    }
+  };
   
   const handleLoad = (entry: HistoryEntry) => {
     onLoadHistory(entry);
-    setActiveTab('current');
+    handleTabChange('current');
   };
 
   const renderCurrentAnalysis = () => {
@@ -112,27 +137,40 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ results, isLoading, 
     );
   };
 
+  const renderSources = () => {
+    return <SourcesPanel references={sources} />;
+  };
+
   return (
     <div className="lg:col-span-2">
       <div className="bg-white rounded-t-xl shadow-lg border-b border-slate-200">
         <div className="flex">
           <button
-            onClick={() => setActiveTab('current')}
+            onClick={() => handleTabChange('current')}
             className={`py-3 px-6 font-semibold text-sm transition-colors ${activeTab === 'current' ? 'text-brand-primary border-b-2 border-brand-primary' : 'text-slate-500 hover:bg-slate-100'}`}
           >
             Current Analysis
           </button>
           <button
-            onClick={() => setActiveTab('history')}
+            onClick={() => handleTabChange('history')}
             className={`py-3 px-6 font-semibold text-sm transition-colors relative ${activeTab === 'history' ? 'text-brand-primary border-b-2 border-brand-primary' : 'text-slate-500 hover:bg-slate-100'}`}
           >
             History
             {history.length > 0 && <span className="absolute top-2 right-2 flex h-5 w-5 items-center justify-center rounded-full bg-indigo-500 text-white text-xs font-bold">{history.length}</span>}
           </button>
+          <button
+            onClick={() => handleTabChange('sources')}
+            className={`py-3 px-6 font-semibold text-sm transition-colors relative ${activeTab === 'sources' ? 'text-brand-primary border-b-2 border-brand-primary' : 'text-slate-500 hover:bg-slate-100'}`}
+          >
+            Sources
+            {sources.length > 0 && <span className="absolute top-2 right-2 flex h-5 w-5 items-center justify-center rounded-full bg-green-500 text-white text-xs font-bold">{sources.length}</span>}
+          </button>
         </div>
       </div>
       <div className="bg-white rounded-b-xl shadow-lg min-h-[500px]">
-        {activeTab === 'current' ? renderCurrentAnalysis() : renderHistory()}
+        {activeTab === 'current' && renderCurrentAnalysis()}
+        {activeTab === 'history' && renderHistory()}
+        {activeTab === 'sources' && renderSources()}
       </div>
     </div>
   );
