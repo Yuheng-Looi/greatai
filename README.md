@@ -19,7 +19,7 @@ Thank you for considering Lexport AI. We are proud to present a *mission-critica
 ### 🧑‍💻 Front-End
 * TypeScript, React, HTML, JavaScript
 
-### ☁️ Cloud & AI
+### ☁️ Backend (Cloud & AI)
 * Bedrock, Amazon Titan Text Embeddings v2, Amazon Nova Lite, Amazon S3 Vector Bucket, Python, JavaScript
 
 ## 🧩 System Design & Architecture
