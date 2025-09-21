@@ -42,7 +42,14 @@ export interface HistoryEntry {
   results: AnalysisResult[];
 }
 
+export interface LawReference {
+  uri: string;
+  title: string;
+  description?: string;
+}
+
 export interface ChatMessage {
   role: 'user' | 'model';
   content: string;
+  references?: LawReference[];
 }

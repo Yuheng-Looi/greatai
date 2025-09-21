@@ -1,22 +1,95 @@
 import React, { useState, useEffect, useRef } from 'react';
-import type { ShipmentItem, ShipmentDetails, AnalysisResult, ChatMessage } from '../types';
-import { ai, Chat } from '../services/geminiService';
+import type { ShipmentItem, ShipmentDetails, AnalysisResult, ChatMessage, LawReference } from '../types';
+import { getFollowUpResponse } from '../services/geminiService';
 import { SparklesIcon } from './icons/SparklesIcon';
 import { SendIcon } from './icons/SendIcon';
 import { PaperAirplaneIcon } from './icons/PaperAirplaneIcon';
+import ChartRenderer from './ChartRenderer';
 
 // Declare globally imported scripts for TypeScript
 declare var marked: { parse: (markdown: string) => string };
 declare var DOMPurify: { sanitize: (html: string) => string };
 
+// Extract and render charts from AI response
+const renderMessageContent = (content: string) => {
+    const chartRegex = /```json:chart\s*([\s\S]*?)\s*```/g;
+    const parts = [];
+    let lastIndex = 0;
+    let match;
+
+    while ((match = chartRegex.exec(content)) !== null) {
+        // Add text before chart
+        if (match.index > lastIndex) {
+            const textContent = content.slice(lastIndex, match.index);
+            if (textContent.trim()) {
+                parts.push(
+                    <div 
+                        key={`text-${lastIndex}`}
+                        className="prose prose-sm max-w-none prose-slate"
+                        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(marked.parse(textContent)) }}
+                    />
+                );
+            }
+        }
+
+        // Add chart
+        try {
+            const chartData = JSON.parse(match[1]);
+            if (chartData.type === 'chart') {
+                parts.push(
+                    <ChartRenderer 
+                        key={`chart-${match.index}`}
+                        chartData={chartData} 
+                    />
+                );
+            }
+        } catch (e) {
+            console.error('Failed to parse chart JSON:', e);
+            parts.push(
+                <div key={`error-${match.index}`} className="text-red-600 text-sm p-2 bg-red-50 rounded border">
+                    Error rendering chart: Invalid JSON format
+                </div>
+            );
+        }
+
+        lastIndex = chartRegex.lastIndex;
+    }
+
+    // Add remaining text after last chart
+    if (lastIndex < content.length) {
+        const remainingContent = content.slice(lastIndex);
+        if (remainingContent.trim()) {
+            parts.push(
+                <div 
+                    key={`text-${lastIndex}`}
+                    className="prose prose-sm max-w-none prose-slate"
+                    dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(marked.parse(remainingContent)) }}
+                />
+            );
+        }
+    }
+
+    // If no charts found, render as regular markdown
+    if (parts.length === 0) {
+        return (
+            <div
+                className="prose prose-sm max-w-none prose-slate"
+                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(marked.parse(content)) }}
+            />
+        );
+    }
+
+    return <div className="space-y-2">{parts}</div>;
+};
+
 interface ChatPanelProps {
     shipmentItems: ShipmentItem[];
     shipmentDetails: ShipmentDetails;
     analysisResults: AnalysisResult[];
+    onReferencesUpdate?: (references: LawReference[]) => void;
 }
 
-export const ChatPanel: React.FC<ChatPanelProps> = ({ shipmentItems, shipmentDetails, analysisResults }) => {
-    const [chat, setChat] = useState<Chat | null>(null);
+export const ChatPanel: React.FC<ChatPanelProps> = ({ shipmentItems, shipmentDetails, analysisResults, onReferencesUpdate }) => {
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [userInput, setUserInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -25,32 +98,8 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ shipmentItems, shipmentDet
     const hasAnalysis = analysisResults.length > 0;
 
     useEffect(() => {
+        // Reset messages when analysis results change
         if (hasAnalysis) {
-            const context = `
-                System: You are a helpful logistics assistant. The user has just completed a shipment analysis.
-                Here is the context of their shipment. Use this information to answer any follow-up questions they have.
-                Do not mention that you have this context unless it's necessary to answer a question. Be concise and helpful.
-                Format your responses using Markdown for clarity (e.g., use lists, bold text, etc.).
-
-                Shipment Details:
-                - From: ${shipmentDetails.from}
-                - To: ${shipmentDetails.to}
-                - Via: ${shipmentDetails.via}
-                
-                Items:
-                ${shipmentItems.map(item => `- ${item.description}`).join('\n')}
-
-                Analysis Results:
-                ${JSON.stringify(analysisResults, null, 2)}
-            `;
-
-            const newChat = ai.chats.create({
-                model: 'gemini-2.5-flash',
-                config: {
-                    systemInstruction: context,
-                },
-            });
-            setChat(newChat);
             setMessages([]);
         }
     }, [analysisResults, shipmentItems, shipmentDetails, hasAnalysis]);
@@ -61,7 +110,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ shipmentItems, shipmentDet
 
     const handleSendMessage = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!userInput.trim() || !chat || isLoading) return;
+        if (!userInput.trim() || isLoading) return;
 
         const newUserMessage: ChatMessage = { role: 'user', content: userInput };
         setMessages(prev => [...prev, newUserMessage]);
@@ -69,18 +118,25 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ shipmentItems, shipmentDet
         setIsLoading(true);
 
         try {
-            const stream = await chat.sendMessageStream({ message: userInput });
+            const { text, references } = await getFollowUpResponse(
+                userInput, 
+                messages, 
+                shipmentItems, 
+                shipmentDetails, 
+                analysisResults
+            );
             
-            let modelResponse = '';
-            setMessages(prev => [...prev, { role: 'model', content: '' }]);
+            const botMessage: ChatMessage = { 
+                role: 'model', 
+                content: text,
+                references: references 
+            };
+            
+            setMessages(prev => [...prev, botMessage]);
 
-            for await (const chunk of stream) {
-                modelResponse += chunk.text;
-                setMessages(prev => {
-                    const newMessages = [...prev];
-                    newMessages[newMessages.length - 1] = { role: 'model', content: modelResponse };
-                    return newMessages;
-                });
+            // Extract references and notify parent
+            if (references.length > 0 && onReferencesUpdate) {
+                onReferencesUpdate(references);
             }
 
         } catch (error) {
@@ -110,14 +166,13 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ shipmentItems, shipmentDet
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
                 {messages.map((msg, index) => (
                     <div key={index} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                        <div className={`max-w-xs md:max-w-md lg:max-w-lg px-4 py-2 rounded-2xl ${msg.role === 'user' ? 'bg-brand-primary text-white' : 'bg-slate-100 text-slate-800'}`}>
+                        <div className={`${msg.role === 'user' ? 'max-w-xs md:max-w-md lg:max-w-lg' : 'max-w-full'} px-4 py-2 rounded-2xl ${msg.role === 'user' ? 'bg-brand-primary text-white' : 'bg-slate-100 text-slate-800'}`}>
                            {msg.role === 'user' ? (
                                <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
                            ) : (
-                               <div
-                                   className="text-sm prose prose-sm max-w-none prose-slate"
-                                   dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(marked.parse(msg.content)) }}
-                               />
+                               <div className="text-sm">
+                                   {renderMessageContent(msg.content)}
+                               </div>
                            )}
                         </div>
                     </div>
@@ -141,7 +196,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ shipmentItems, shipmentDet
                         type="text"
                         value={userInput}
                         onChange={(e) => setUserInput(e.target.value)}
-                        placeholder="Ask about your results..."
+                        placeholder="Ask about your results... (Try: 'Show me a cost breakdown chart' or 'Compare regulations in a table')"
                         className="flex-grow block w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-full text-sm shadow-sm placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
                         disabled={isLoading}
                     />
