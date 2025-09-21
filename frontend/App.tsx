@@ -3,7 +3,7 @@ import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
 import { ResultsPanel } from './components/ResultsPanel';
 import { ChatPanel } from './components/ChatPanel';
-import type { ShipmentItem, ShipmentDetails, AnalysisResult, HistoryEntry } from './types';
+import type { ShipmentItem, ShipmentDetails, AnalysisResult, HistoryEntry, LawReference } from './types';
 import { getExportAdvice } from './services/geminiService';
 import { loadHistory, saveHistory, clearHistory } from './services/historyService';
 
@@ -51,6 +51,8 @@ const App: React.FC = () => {
     const [isLoading, setIsLoading] = useState<boolean>(false);
     const [error, setError] = useState<string | null>(null);
     const [history, setHistory] = useState<HistoryEntry[]>([]);
+    const [activeTab, setActiveTab] = useState<'current' | 'history' | 'sources'>('current');
+    const [sources, setSources] = useState<LawReference[]>([]);
 
     useEffect(() => {
         setHistory(loadHistory());
@@ -107,6 +109,18 @@ const App: React.FC = () => {
         clearHistory();
     }, []);
 
+    const handleReferencesUpdate = useCallback((references: LawReference[]) => {
+        setSources(references);
+        // Auto-switch to sources tab when references are available
+        if (references.length > 0) {
+            setActiveTab('sources');
+        }
+    }, []);
+
+    const handleTabChange = useCallback((tab: 'current' | 'history' | 'sources') => {
+        setActiveTab(tab);
+    }, []);
+
 
 
     return (
@@ -133,13 +147,17 @@ const App: React.FC = () => {
                             history={history}
                             onLoadHistory={handleLoadFromHistory}
                             onClearHistory={handleClearHistory}
+                            activeTab={activeTab}
+                            onTabChange={handleTabChange}
+                            sources={sources}
                         />
                     </div>
                     <div className="lg:col-span-4">
                         <ChatPanel 
                             shipmentItems={shipmentItems} 
                             shipmentDetails={shipmentDetails} 
-                            analysisResults={analysisResults} 
+                            analysisResults={analysisResults}
+                            onReferencesUpdate={handleReferencesUpdate}
                             key={analysisResults.length > 0 ? analysisResults[0].itemName + history.length : 'initial'} // Re-mount chat when results change
                         />
                     </div>
