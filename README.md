@@ -17,10 +17,10 @@ Thank you for considering Lexport AI. We are proud to present a *mission-critica
 ## 🧠 Skills & Tech Stack
 
 ### 🧑‍💻 Front-End
-* Typescript, React, HTML, Javascript
+* TypeScript, React, HTML, JavaScript
 
 ### ☁️ Cloud & AI
-* Bedrock, Amazon titan Text Embeddings v2, Amazon Nova Lite, Amazon S3 Vector Bucket, Python, Javascript
+* Bedrock, Amazon Titan Text Embeddings v2, Amazon Nova Lite, Amazon S3 Vector Bucket, Python, JavaScript
 
 ## 🧩 System Design & Architecture
 Our system follows a Retrieval-Augmented Generation (RAG) pipeline to deliver accurate, plain-language export compliance guidance to SMEs.
