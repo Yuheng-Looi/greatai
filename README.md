@@ -38,5 +38,5 @@ Our system follows a Retrieval-Augmented Generation (RAG) pipeline to deliver ac
 ---
 
 ## 🚀 Explore Our Products
-* **Watch the Full Demonstration:** See the RAG pipeline in action, turning a natural language query into a fully-cited, actionable compliance roadmap in seconds: [Full Demo Video](https://www.youtube.com/watch?v=KJgQoqapFkc)
+* **Watch the Full Demonstration:** See the RAG pipeline in action, turning a natural language query into a fully-cited, actionable compliance roadmap in seconds: [Full Demo Video](https://drive.google.com/file/d/1JvQ8lJffWNAoFS_vt2qtdHuw4jtiQKEM/view)
 * *Interested in the Live Platform?* Connect with the Lexport AI team for a personalized walk-through to see the full scope of our centralized, intelligent compliance solution. 🤝
