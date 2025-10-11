@@ -1,0 +1,11 @@
+2025-10-11 13:58:15,945 - INFO - Fetching: https://www.customs.gov.my/en/tp/Pages/tp_tgl.aspx
+2025-10-11 13:58:37,638 - INFO - Fetching: https://www.customs.gov.my/en/pg/Pages/pg_aktakastam.aspx
+2025-10-11 13:59:20,979 - INFO - Downloaded: Borang_Kastam_No.7_(K7).pdf
+2025-10-11 13:59:42,697 - INFO - Downloaded: Declaration_of_Cash_and_Bearer_Negotiable_Instrument_(BNI)_For_Travellers_Entering___Leaving_Malaysia.pdf
+2025-10-11 14:00:04,316 - INFO - Downloaded: a)_Borang_Kastam_no.7_(K7).pdf
+2025-10-11 14:00:04,320 - INFO - Already exists: Borang_Kastam_No.7_(K7).pdf
+2025-10-11 14:00:04,320 - INFO - Already exists: Declaration_of_Cash_and_Bearer_Negotiable_Instrument_(BNI)_For_Travellers_Entering___Leaving_Malaysia.pdf
+2025-10-11 14:00:25,915 - INFO - Downloaded: Amendment_2018.pdf
+2025-10-11 14:00:47,513 - INFO - Downloaded: Amendment_2_2018.pdf
+2025-10-11 14:01:09,154 - INFO - Downloaded: Amendment_2019.pdf
+2025-10-11 14:01:09,156 - INFO - Scrape complete. 6 new files downloaded.
