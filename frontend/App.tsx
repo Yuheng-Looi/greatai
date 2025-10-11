@@ -38,7 +38,7 @@ const initialShipmentDetails: ShipmentDetails = {
     from: 'Malaysia',
     to: 'Singapore',
     via: 'Air Freight',
-    image: null,
+    document: null,
 };
 
 const App: React.FC = () => {
@@ -59,8 +59,8 @@ const App: React.FC = () => {
     }, []);
 
     const handleAnalyze = useCallback(async () => {
-        if (shipmentItems.length === 0 && !shipmentDetails.image) {
-            setError("Please add at least one item or an image to analyze.");
+        if (shipmentItems.length === 0 && !shipmentDetails.document) {
+            setError("Please add at least one item or a document to analyze.");
             return;
         }
         setIsLoading(true);

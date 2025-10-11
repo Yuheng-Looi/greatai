@@ -84,10 +84,10 @@ const buildPromptParts = (items: ShipmentItem[], details: ShipmentDetails) => {
       textPrompt += `\nItems to Analyze:\n${itemDescriptions}\n`;
   }
   
-  if (items.length === 0 && details.image) {
-      textPrompt += "\nThe list of items is not provided in text. Please identify the item(s) and their quantities from the provided image and perform the analysis on them. If the image is of a single item, analyze that one item.";
-  } else if (details.image) {
-      textPrompt += "\nAn image is provided for additional context. Use it to better understand the items listed and refine the analysis.";
+  if (items.length === 0 && details.document) {
+      textPrompt += "\nThe list of items is not provided in text. Please identify the item(s) and their quantities from the provided document and perform the analysis on them. If the document shows a single item, analyze that one item.";
+  } else if (details.document) {
+      textPrompt += "\nA document is provided for additional context. Use it to better understand the items listed and refine the analysis.";
   }
 
   textPrompt += `
@@ -105,15 +105,30 @@ const buildPromptParts = (items: ShipmentItem[], details: ShipmentDetails) => {
   
   const textPart = { text: textPrompt };
 
-  if (details.image) {
-    const imagePart = {
-      inlineData: {
-        mimeType: details.image.mimeType,
-        data: details.image.data,
-      },
-    };
-    // For multimodal requests, it can be beneficial to place the image before the text prompt.
-    return [imagePart, textPart];
+  if (details.document) {
+    if (details.document.type === 'text') {
+      // For text files, decode base64 and include as text
+      const textContent = atob(details.document.data);
+      return [textPart, { text: `\n\nDocument Content:\n${textContent}` }];
+    } else if (details.document.type === 'image') {
+      // For images, use inline data
+      const documentPart = {
+        inlineData: {
+          mimeType: details.document.mimeType,
+          data: details.document.data,
+        },
+      };
+      return [documentPart, textPart];
+    } else if (details.document.type === 'pdf') {
+      // For PDFs, use inline data
+      const documentPart = {
+        inlineData: {
+          mimeType: details.document.mimeType,
+          data: details.document.data,
+        },
+      };
+      return [documentPart, textPart];
+    }
   }
   
   return [textPart];

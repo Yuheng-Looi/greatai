@@ -28,9 +28,11 @@ export interface ShipmentDetails {
   from: string;
   to: string;
   via: string;
-  image: {
+  document: {
     data: string; // base64 encoded data
     mimeType: string;
+    name: string; // file name
+    type: 'image' | 'text' | 'pdf'; // document type
   } | null;
 }
 
