@@ -154,6 +154,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ items, setItems, details, setD
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  const [availableCameras, setAvailableCameras] = useState<MediaDeviceInfo[]>([]);
+  const [selectedCamera, setSelectedCamera] = useState<string>('');
 
   // Cleanup camera stream on unmount
   useEffect(() => {
@@ -283,15 +285,41 @@ export const Sidebar: React.FC<SidebarProps> = ({ items, setItems, details, setD
 
   const openCamera = async () => {
     try {
+      // Get available cameras
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const videoDevices = devices.filter(device => device.kind === 'videoinput');
+      setAvailableCameras(videoDevices);
+      
+      // Select the first camera or the back camera if available
+      const backCamera = videoDevices.find(device => 
+        device.label.toLowerCase().includes('back') || 
+        device.label.toLowerCase().includes('rear') ||
+        device.label.toLowerCase().includes('environment')
+      );
+      const defaultCamera = backCamera || videoDevices[0];
+      
+      if (defaultCamera) {
+        setSelectedCamera(defaultCamera.deviceId);
+      }
+      
       const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: 'environment' } // Use back camera if available
+        video: { 
+          deviceId: defaultCamera ? { exact: defaultCamera.deviceId } : undefined,
+          facingMode: defaultCamera ? undefined : 'environment'
+        }
       });
       setCameraStream(stream);
       setIsCameraOpen(true);
       
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-      }
+      // Wait for next tick to ensure modal is rendered
+      setTimeout(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.play().catch(err => {
+            console.error("Error playing video:", err);
+          });
+        }
+      }, 100);
     } catch (error) {
       console.error("Error accessing camera:", error);
       alert('Unable to access camera. Please check permissions or use file upload instead.');
@@ -304,6 +332,35 @@ export const Sidebar: React.FC<SidebarProps> = ({ items, setItems, details, setD
       setCameraStream(null);
     }
     setIsCameraOpen(false);
+    setAvailableCameras([]);
+    setSelectedCamera('');
+  };
+
+  const switchCamera = async (deviceId: string) => {
+    try {
+      // Stop current stream
+      if (cameraStream) {
+        cameraStream.getTracks().forEach(track => track.stop());
+      }
+      
+      // Start new stream with selected camera
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { deviceId: { exact: deviceId } }
+      });
+      
+      setCameraStream(stream);
+      setSelectedCamera(deviceId);
+      
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play().catch(err => {
+          console.error("Error playing video:", err);
+        });
+      }
+    } catch (error) {
+      console.error("Error switching camera:", error);
+      alert('Unable to switch camera. Please try again.');
+    }
   };
 
   const capturePhoto = async () => {
@@ -330,30 +387,37 @@ export const Sidebar: React.FC<SidebarProps> = ({ items, setItems, details, setD
         setIsAnalyzingDocument(true);
         closeCamera();
         
-        const base64String = await toBase64(blob as File);
-        const base64Data = base64String.split(',')[1];
-        
-        const documentData = {
-          data: base64Data,
-          mimeType: 'image/jpeg',
-          name: `captured-photo-${Date.now()}.jpg`,
-          type: 'image' as const
-        };
-        
-        // Update details with the captured photo
-        setDetails({ ...details, document: documentData });
+        // Convert blob to base64
+        const reader = new FileReader();
+        reader.readAsDataURL(blob);
+        reader.onload = async () => {
+          const base64String = reader.result as string;
+          const base64Data = base64String.split(',')[1];
+          
+          const documentData = {
+            data: base64Data,
+            mimeType: 'image/jpeg',
+            name: `captured-photo-${Date.now()}.jpg`,
+            type: 'image' as const
+          };
+          
+          // Update details with the captured photo
+          setDetails({ ...details, document: documentData });
 
-        // Start image analysis
-        analyzeDocument(documentData, details)
-          .then((analysisResult) => {
+          // Start image analysis
+          try {
+            const analysisResult = await analyzeDocument(documentData, details);
             applyAnalysisResults(analysisResult, setItems, setDetails, details, setAnalysisResult, setShowFeedback);
-          })
-          .catch((error) => {
+          } catch (error) {
             console.error("Error analyzing captured photo:", error);
-          })
-          .finally(() => {
+          } finally {
             setIsAnalyzingDocument(false);
-          });
+          }
+        };
+        reader.onerror = () => {
+          console.error("Error reading captured photo");
+          setIsAnalyzingDocument(false);
+        };
           
       } catch (error) {
         console.error("Error processing captured photo:", error);
@@ -435,28 +499,52 @@ export const Sidebar: React.FC<SidebarProps> = ({ items, setItems, details, setD
       {/* Camera Modal */}
       {isCameraOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-75 z-50 flex items-center justify-center">
-          <div className="bg-white rounded-lg p-4 max-w-md w-full mx-4">
+          <div className="bg-white rounded-lg p-4 max-w-2xl w-full mx-4">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-semibold">Take Photo</h3>
               <button onClick={closeCamera} className="text-slate-500 hover:text-slate-700">
                 <XCircleIcon className="w-6 h-6" />
               </button>
             </div>
-            <div className="relative">
+            
+            {/* Camera Selection Dropdown */}
+            {availableCameras.length > 1 && (
+              <div className="mb-3">
+                <label htmlFor="camera-select" className="block text-sm font-medium text-slate-600 mb-1">
+                  Select Camera
+                </label>
+                <select
+                  id="camera-select"
+                  value={selectedCamera}
+                  onChange={(e) => switchCamera(e.target.value)}
+                  className="block w-full px-3 py-2 bg-white border border-slate-300 rounded-md text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                >
+                  {availableCameras.map((camera, index) => (
+                    <option key={camera.deviceId} value={camera.deviceId}>
+                      {camera.label || `Camera ${index + 1}`}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            
+            <div className="relative bg-black rounded-lg overflow-hidden" style={{ minHeight: '400px' }}>
               <video
                 ref={videoRef}
                 autoPlay
                 playsInline
-                className="w-full rounded-lg"
+                muted
+                className="w-full h-full object-cover rounded-lg"
+                style={{ minHeight: '400px', maxHeight: '60vh' }}
               />
               <canvas ref={canvasRef} className="hidden" />
             </div>
             <div className="flex gap-2 mt-4">
               <button
                 onClick={capturePhoto}
-                className="flex-1 bg-indigo-600 text-white py-2 px-4 rounded-lg hover:bg-indigo-700 transition-colors"
+                className="flex-1 bg-indigo-600 text-white py-2 px-4 rounded-lg hover:bg-indigo-700 transition-colors font-medium"
               >
-                Capture Photo
+                📸 Capture Photo
               </button>
               <button
                 onClick={closeCamera}
