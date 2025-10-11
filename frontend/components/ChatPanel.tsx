@@ -104,10 +104,6 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ shipmentItems, shipmentDet
         }
     }, [analysisResults, shipmentItems, shipmentDetails, hasAnalysis]);
 
-    useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [messages]);
-
     const handleSendMessage = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!userInput.trim() || isLoading) return;
