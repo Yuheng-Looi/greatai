@@ -21,7 +21,7 @@ interface SidebarProps {
   isLoading: boolean;
 }
 
-const COUNTRIES = ['Malaysia', 'Singapore', 'USA'];
+const COUNTRIES = ['Malaysia', 'Singapore', 'Thailand', 'Indonesia'];
 const TRANSPORT_MODES = ['Air Freight', 'Ocean Freight', 'Rail Freight', 'Road Freight'];
 
 // Helper to convert file to base64
@@ -101,7 +101,7 @@ const applyAnalysisResults = (
       // Update origin if found and different
       if (analysisResult.shipmentDetails?.from && 
           analysisResult.shipmentDetails.from !== prevDetails.from && 
-          ['Malaysia', 'Singapore', 'USA'].includes(analysisResult.shipmentDetails.from)) {
+          ['Malaysia', 'Singapore', 'Thailand', 'Indonesia'].includes(analysisResult.shipmentDetails.from)) {
         updatedDetails.from = analysisResult.shipmentDetails.from;
         feedback.fieldsUpdated.push('Origin');
         console.log('Updated origin to:', analysisResult.shipmentDetails.from);
@@ -110,7 +110,7 @@ const applyAnalysisResults = (
       // Update destination if found and different
       if (analysisResult.shipmentDetails?.to && 
           analysisResult.shipmentDetails.to !== prevDetails.to && 
-          ['Malaysia', 'Singapore', 'USA'].includes(analysisResult.shipmentDetails.to)) {
+          ['Malaysia', 'Singapore', 'Thailand', 'Indonesia'].includes(analysisResult.shipmentDetails.to)) {
         updatedDetails.to = analysisResult.shipmentDetails.to;
         feedback.fieldsUpdated.push('Destination');
         console.log('Updated destination to:', analysisResult.shipmentDetails.to);
