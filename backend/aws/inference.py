@@ -3,7 +3,7 @@ import json
 
 # --- Setup clients ---
 region = "us-east-1"
-kb_id = "JAQ9TXA11G"
+kb_id = "ZJPFKLZF4U"
 
 agent_client = boto3.client("bedrock-agent-runtime", region_name=region)
 runtime_client = boto3.client("bedrock-runtime", region_name=region)
@@ -22,7 +22,7 @@ def query_knowledge_base_and_llm(user_query, conversation_history):
         retrievalQuery={"text": user_query},
         retrievalConfiguration={
             "vectorSearchConfiguration": {
-                "numberOfResults": 5
+                "numberOfResults": 8
             }
         }
     )
